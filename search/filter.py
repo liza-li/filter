@@ -29,13 +29,17 @@ for i in json_list:
         if area < area_thr:
             continue
         
-        with open(filter_json, 'w') as outfile1:
-            json.dump(j, outfile1)
-            #outfile1.close()
-        
         print("已读取",count+1,"张img")
         count=count+1
         img_ids.append(j['image_id'])
+         
+        with open(filter_json, 'a') as write_f:
+	        json.dump(j, write_f, indent=4, ensure_ascii=False)
+           
+         
+        
+        
+       
 
 
 '''
