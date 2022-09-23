@@ -5,6 +5,9 @@ import pickle
 import cv2
 import numpy as np
 from pycocotools.coco import COCO
+import json
+import numpy
+import jsonlines
 
 
 def _xywh2cs(x, y, w, h):
@@ -114,6 +117,8 @@ def load_db(root):
             center, scale = _box2cs(obj['clean_bbox'][:4])
             rec.append({
                 'image': image_path_from_index(root, index),
+                'width':  width,
+                'height': height,
                 'bbox': obj['clean_bbox'],
                 'center': center,
                 'scale': scale,
@@ -132,7 +137,7 @@ def filter_box(db, area_thr):
         frec = []
         for d in rec:
             area = d['bbox'][2] * d['bbox'][3]
-            if area < area_thr:
+            if area > area_thr:
                 frec.append(d)
         if len(frec) > 0:
             fdb.append(frec)
@@ -154,7 +159,6 @@ def vis(db):
             cv2.rectangle(img,(x,y),(x+w,y+h),(0,255,0),2)
             cv2.imwrite(basename, img)
 
-
 def vis_(save_root, db):
     for rec in db:
         for d in rec:
@@ -169,28 +173,44 @@ def vis_(save_root, db):
             x,y,w,h = [int(i) for i in bbox]
             cv2.rectangle(img,(x,y),(x+w,y+h),(0,255,0),2)
             cv2.imwrite(f'{save_root}/{basename}', img)
-            # break
-            # cv2.imshow('x',img)
-            # cv2.waitKey(100000)
-
 
 def crop(img, bbox):
     x,y,w,h = [int(i) for i in bbox]
     crop_img = img[y:y+h, x:x+w]
     return crop_img
 
+class NpEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, (numpy.int_, numpy.intc, numpy.intp, numpy.int8,
+            numpy.int16, numpy.int32, numpy.int64, numpy.uint8,
+            numpy.uint16,numpy.uint32, numpy.uint64)):
+            return int(obj)
+        elif isinstance(obj, (numpy.float_, numpy.float16, numpy.float32, 
+            numpy.float64)):
+            return float(obj)
+        elif isinstance(obj, (numpy.ndarray,)): # add this line
+            return obj.tolist() # add this line
+        return json.JSONEncoder.default(self, obj)           
+
 
 def create_db(root, sizes, fdb_prefix):
     db = load_db(root)
     # with open('db.pkl', 'wb') as fd:
     #     pickle.dump(db, fd)
-    fdb_names = []
+    
+    with open('/home/zeli/projects/search/filter_coco.json', 'a') as fd:
+            for f in db:
+                json.dump(f,fd)
+    
+    '''
     for s in sizes:
         fdb = filter_box(db, s*s/4*3)
-        fdbname = f'{fdb_prefix}_fdb_{s}x{int(s/4*3)}.pkl'
-        with open(fdbname, 'wb') as fd:
-            pickle.dump(fdb, fd)
+        fdbname = f'{fdb_prefix}_fdb_{s}x{int(s/4*3)}.json'
+        with open(fdbname, 'w') as fd:
+            for f in fdb:
+                json.dump(f,fd,cls=NpEncoder)
         fdb_names.append(fdbname)
+    '''
     return fdb_names
 
 
@@ -207,17 +227,39 @@ if __name__ == '__main__':
     os.makedirs('fdb', exist_ok=True)
     # dataset_paths = {'coco':'coco', 'aic':'aic', 'hieve':'hieve/HIE20', 'posetrack': 'posetrack'}
     dataset_paths = {'coco':'coco'}
-    sizes = [256, 128, 64, 32]
+    sizes = [128]
     for dataset_name, dataset_path in dataset_paths.items():
         dataset_root = f'/datasets/{dataset_path}'
         fdb_prefix = f'fdb/{dataset_name}'
-        fdb_names = create_db(dataset_root, sizes, fdb_prefix)
-        for fdbname in fdb_names:
-            with open(fdbname, 'rb') as fd:
-                fdb = pickle.load(fd)
+        db = load_db( dataset_root)
+        with open('/home/zeli/projects/search/filter_coco.json', 'a') as fd:
+            for f in db:
+                json.dump(f,fd,cls=NpEncoder)
+                fd.write('\n')
+               # json.dump(",",fd)
+                
+        json_list = []
+        with open('/home/zeli/projects/search/filter_coco.json', 'r') as ff:
+            for item in jsonlines.Reader(ff):
+                json_list.append(item)
+        
+        #fdb_names = create_db(dataset_root, sizes, fdb_prefix)
+        '''
+             for fdbname in fdb_names:
+            
+            with open(fdbname) as fd:
+                fdb = fd.readlines()
+                str = fdb[0].replace("][",",")
+            with open('/home/zeli/projects/search/new_json.json', 'w') as fd:
+                fd.write(json.dumps(str))    
+            
+                
             num = num_instance(fdb)
             print(fdbname, num)
     
+        
+        '''
+   
     # save_root = 'vis'
     # os.makedirs(save_root, exist_ok=True)
     # vis(save_root, fdb)
